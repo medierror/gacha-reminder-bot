@@ -56,7 +56,9 @@ function curChip(game, amount) {
 function card(i, showGame) {
   const g = G(i.game);
   let thumb;
-  if (i.image && (i.kind !== "banner" || i.official_image)) {
+  if (i.image && i.image_is_icon) {
+    thumb = `<div class="thumb fallback mode"><img src="${url(i.image)}" alt="">`;
+  } else if (i.image && (i.kind !== "banner" || i.official_image)) {
     thumb = `<div class="thumb" style="background-image:url('${url(i.image)}')">`;
   } else if (i.image) {
     thumb = `<div class="thumb portrait"><img src="${url(i.image)}" alt="">`;

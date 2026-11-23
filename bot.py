@@ -73,7 +73,7 @@ STATE_FILE = DATA_DIR / "state.json"
 DEFAULT_STATE = {
     "channels": {}, "sent": {}, "seen": {}, "seeded_items": [], "codes_seen": {},
     "seeded_codes": [], "manual": [], "recurring": [], "next_id": 1,
-    "last_daily": None, "art": {}, "checkin_day": {}, "stamina_alerted": {},
+    "last_daily": None, "art": {}, "checkin_day": {}, "stamina_alerted": {}, "wiki": {},
 }
 
 
@@ -167,6 +167,14 @@ def build_embeds(game: str, title: str, items: list, footer_total=True) -> list:
     return embeds
 
 
+def user_item(entry: dict, kind: str, end: int) -> dict:
+    """A /event or /recurring entry as a card item, with its wiki picture if one was found."""
+    hit = state["wiki"].get(f"{entry['game']}:{sources._norm(entry['name'])}") or {}
+    return {"key": f"{kind}:{entry['id']}", "game": entry["game"], "kind": kind, "name": entry["name"],
+            "start": 0, "end": end, "currency": entry.get("currency") or 0, "image": hit.get("url") or None,
+            "image_is_icon": sources.is_icon(hit.get("url"))}
+
+
 KIND_LABEL = {"event": "Event", "challenge": "Endgame", "banner": "Banner", "manual": "Your reminder",
               "recurring": "Repeating reset"}
 
@@ -185,8 +193,8 @@ def card_embed(item: dict, note: str) -> discord.Embed:
     brand(e, item["game"], KIND_LABEL.get(item["kind"], ""))
     e.set_footer(text=note)
     if item.get("image"):
-        if item["kind"] == "banner" and not item.get("official_image"):
-            e.set_thumbnail(url=item["image"])  # character icon
+        if (item["kind"] == "banner" and not item.get("official_image")) or item.get("image_is_icon"):
+            e.set_thumbnail(url=item["image"])  # character / mode icon
         else:
             e.set_image(url=item["image"])  # big event artwork
     else:
@@ -194,6 +202,8 @@ def card_embed(item: dict, note: str) -> discord.Embed:
                                                  else game_icon(item["game"])))
         if item["kind"] in ("manual", "recurring") and game_art(item["game"]):
             e.set_image(url=game_art(item["game"]))  # your own reminders get the game's key art
+    if item.get("image_is_icon") and item["kind"] in ("manual", "recurring") and game_art(item["game"]):
+        e.set_image(url=game_art(item["game"]))  # small mode icon + the game's key art underneath
     return e
 
 
@@ -312,20 +322,25 @@ class GachaBot(discord.Client):
                 self.calendar["wuwa"] = items
             if codes is not None:
                 self.codes["wuwa"] = codes
+        await self.add_pictures([i for lst in self.calendar.values() for i in lst] + self.user_items())
+
+    async def add_pictures(self, items: list):
+        """Wiki pictures for endgame modes and your own reminders (cached for a week)."""
+        try:
+            await sources.add_wiki_images(self.http_session, items, state["wiki"])
+        except Exception as e:
+            log.warning("Wiki pictures failed: %s", e)
 
     def user_items(self) -> list:
         now = time.time()
         items = []
         for m in state["manual"]:
-            items.append({"key": f"manual:{m['id']}", "game": m["game"], "kind": "manual", "name": m["name"],
-                          "start": 0, "end": m["end"], "currency": m.get("currency") or 0, "image": None})
+            items.append(user_item(m, "manual", m["end"]))
         for r in state["recurring"]:
             period = r["every_days"] * 86400
             while r["next_end"] <= now:
                 r["next_end"] += period
-            items.append({"key": f"recurring:{r['id']}", "game": r["game"], "kind": "recurring",
-                          "name": r["name"], "start": 0, "end": r["next_end"],
-                          "currency": r.get("currency") or 0, "image": None})
+            items.append(user_item(r, "recurring", r["next_end"]))
         return items
 
     def all_items(self) -> list:
@@ -913,9 +928,7 @@ recurring_group = app_commands.Group(name="recurring", description="Repeating re
 def entry_card(entry: dict, note: str) -> discord.Embed:
     """Picture card for something you added with /event or /recurring."""
     kind = "recurring" if "next_end" in entry else "manual"
-    item = {"game": entry["game"], "kind": kind, "name": entry["name"], "start": 0,
-            "end": entry.get("next_end", entry.get("end")), "currency": entry.get("currency") or 0, "image": None}
-    return card_embed(item, note)
+    return card_embed(user_item(entry, kind, entry.get("next_end", entry.get("end"))), note)
 
 
 async def send_cards(inter: discord.Interaction, cards: list, empty: str):
@@ -944,7 +957,10 @@ async def event_add(inter: discord.Interaction, game: app_commands.Choice[str], 
     state["next_id"] += 1
     state["manual"].append(entry)
     save_state()
-    await inter.response.send_message("📌 **Reminder added!**", embed=entry_card(entry, f"ID {entry['id']}"))
+    await inter.response.defer(thinking=True)
+    await bot.add_pictures([user_item(entry, "manual", end)])  # look up its picture right away
+    save_state()
+    await inter.followup.send("📌 **Reminder added!**", embed=entry_card(entry, f"ID {entry['id']}"))
 
 
 @event_group.command(name="list", description="List the events you added")
@@ -979,8 +995,11 @@ async def recurring_add(inter: discord.Interaction, game: app_commands.Choice[st
     state["next_id"] += 1
     state["recurring"].append(entry)
     save_state()
-    await inter.response.send_message(f"🔁 **Added!** It repeats every {every_days} days.",
-                                      embed=entry_card(entry, f"ID {entry['id']} · every {every_days} days"))
+    await inter.response.defer(thinking=True)
+    await bot.add_pictures([user_item(entry, "recurring", end)])  # look up its picture right away
+    save_state()
+    await inter.followup.send(f"🔁 **Added!** It repeats every {every_days} days.",
+                              embed=entry_card(entry, f"ID {entry['id']} · every {every_days} days"))
 
 
 @recurring_group.command(name="list", description="List repeating resets")

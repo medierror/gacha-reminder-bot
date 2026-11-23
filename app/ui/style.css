@@ -81,6 +81,7 @@ h2 .sub { color: var(--muted); font-weight: 400; font-size: 13px; }
 .thumb { position: relative; aspect-ratio: 16 / 8; background: var(--panel-2) center/cover no-repeat; }
 .thumb.fallback { display: grid; place-items: center; background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--c) 55%, #000) 0%, #151722 70%); }
 .thumb.fallback img { width: 64px; height: 64px; filter: drop-shadow(0 6px 14px rgba(0,0,0,.5)); }
+.thumb.fallback.mode img { width: 96px; height: 96px; object-fit: contain; }
 .thumb.portrait { display: flex; align-items: flex-end; justify-content: center; background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--c) 60%, #000) 0%, #151722 75%); }
 .thumb.portrait img { height: 92%; max-width: 70%; object-fit: contain; filter: drop-shadow(0 8px 18px rgba(0,0,0,.6)); }
 .tag { position: absolute; top: 10px; left: 10px; padding: 3px 9px; border-radius: 99px; font-size: 11px; font-weight: 600; background: rgba(10,11,18,.75); backdrop-filter: blur(6px); }

@@ -9,6 +9,7 @@ import datetime as dt
 import html
 import logging
 import re
+import time
 
 import aiohttp
 
@@ -185,8 +186,82 @@ async def fetch_calendar(session: aiohttp.ClientSession, game: str, server: str)
                 "icon": _currency_icon(game, it) if kind != "banner" else None,
                 "featured": featured,
                 "official_image": False,
+                "mode": it.get("type_name") if kind == "challenge" else None,
             })
     return items
+
+
+# ---------------------------------------------------------------- pictures for endgame modes & your own reminders
+# Each game's fan wiki (Fandom) has an image for every endgame mode. Looked up once a week, then cached.
+WIKIS = {"genshin": "genshin-impact", "hsr": "honkai-star-rail", "zzz": "zenless-zone-zero",
+         "wuwa": "wutheringwaves", "hi3": "honkaiimpact3"}
+MODE_PAGES = {  # calendar "type_name" -> wiki page(s) to try
+    "ActTypeTower": ["Spiral Abyss"], "ActTypeRoleCombat": ["Imaginarium Theater"],
+    "ChallengeTypeChasm": ["Forgotten Hall", "Memory of Chaos"], "ChallengeTypeStory": ["Pure Fiction"],
+    "ChallengeTypeBoss": ["Apocalyptic Shadow"], "ChallengeTypePeak": ["Anomaly Arbitration"],
+    "shiyu_defense": ["Shiyu Defense"], "deadly_assault": ["Deadly Assault"],
+    "annihilation_simulacrum": ["Annihilation Simulacrum"], "threshold_simulation": ["Threshold Simulation"],
+}
+WIKI_CACHE_DAYS = 7
+
+
+async def wiki_image(session: aiohttp.ClientSession, game: str, titles: list | None = None,
+                     search: str | None = None) -> str | None:
+    """Image of a wiki page: exact page titles first; or a search whose result title really matches."""
+    params = {"action": "query", "prop": "pageimages", "pithumbsize": "800", "format": "json", "redirects": "1"}
+    if titles:
+        params["titles"] = "|".join(titles)
+    else:
+        params.update(generator="search", gsrsearch=search, gsrlimit="3")
+    async with session.get(f"https://{WIKIS[game]}.fandom.com/api.php", params=params, headers=HEADERS,
+                           timeout=aiohttp.ClientTimeout(total=20)) as r:
+        r.raise_for_status()
+        data = await r.json(content_type=None)
+    query = data.get("query") or {}
+    pages = list((query.get("pages") or {}).values())
+    src = {p.get("title"): (p.get("thumbnail") or {}).get("source") for p in pages}
+    if titles:
+        redirect = {x["from"]: x["to"] for x in query.get("redirects") or []}
+        for t in titles:
+            if src.get(redirect.get(t, t)):
+                return src[redirect.get(t, t)]
+        return None
+    want = _norm(search)
+    for p in sorted(pages, key=lambda p: p.get("index", 99)):
+        title = _norm(p.get("title"))
+        if src.get(p.get("title")) and title and (want in title or title in want):
+            return src[p.get("title")]
+    return None
+
+
+def is_icon(url: str | None) -> bool:
+    return bool(url) and "icon" in url.lower()
+
+
+async def add_wiki_images(session: aiohttp.ClientSession, items: list, cache: dict) -> None:
+    """Fill in pictures for endgame modes and your own reminders that have none. `cache` is saved by the caller."""
+    now = time.time()
+    for it in items:
+        if it.get("image") or it["game"] not in WIKIS:
+            continue
+        if it["kind"] == "challenge":
+            titles, search = MODE_PAGES.get(it.get("mode") or "", []) + [it["name"]], None
+        elif it["kind"] in ("manual", "recurring"):
+            titles, search = None, it["name"]
+        else:
+            continue
+        key = f"{it['game']}:{it.get('mode') or _norm(it['name'])}"
+        hit = cache.get(key)
+        if not hit or now - hit.get("t", 0) > WIKI_CACHE_DAYS * 86400:
+            try:
+                url = await wiki_image(session, it["game"], titles=titles, search=search)
+            except Exception as e:
+                log.info("wiki image for %s: %s", key, type(e).__name__)
+                continue
+            hit = cache[key] = {"url": url or "", "t": now}
+        if hit["url"]:
+            it["image"] = hit["url"]
+            it["image_is_icon"] = is_icon(hit["url"])
 
 
 # ---------------------------------------------------------------- official in-game announcements (HoYoverse)

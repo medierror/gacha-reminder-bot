@@ -187,6 +187,11 @@ class Engine:
             jobs.append(wuwa())
         if jobs:
             await asyncio.gather(*jobs)
+        try:  # wiki pictures for endgame modes (cached for a week)
+            await sources.add_wiki_images(self.session, [i for lst in self.calendar.values() for i in lst],
+                                          self.state.setdefault("wiki", {}))
+        except Exception as e:
+            log.warning("wiki pictures: %s", e)
         self.updated = time.time()
 
     async def refresh_account(self):
@@ -328,7 +333,7 @@ class Engine:
         codes = {k: [{**c, "url": GAMES[k]["redeem"].format(code=c["code"]) if GAMES[k]["redeem"] else None}
                      for c in v] for k, v in self.codes.items()}
         items = [{k: i.get(k) for k in ("key", "game", "kind", "name", "start", "end", "currency", "image",
-                                        "icon", "official_image")}
+                                        "icon", "official_image", "image_is_icon")}
                  for lst in self.calendar.values() for i in lst if i["end"] > time.time()]
         account = None
         if linked:
