@@ -148,3 +148,20 @@ sudo journalctl -u gacha-bot -f        # live log
 sudo bash /home/gachabot/gacha-reminder-bot/deploy/install.sh   # update to the latest version
 ```
 ⚠️ Run the bot in **one place only**. If it runs on the PC and the server at the same time, every message gets posted twice.
+
+---
+
+## 💻 Gacha Tracker: the Windows app
+
+A desktop companion that uses the same data as the bot, but runs on your own PC, no Discord needed:
+
+- **Events & banners gallery**: one page per game with the official artwork, how many primos/jades/polychromes are left to collect, and live countdowns.
+- **Redeem codes**: a **Copy** button, plus a **Redeem** button that opens the official redeem page with the code already filled in. Honkai 3rd and Wuthering Waves codes are redeemed in-game.
+- **Windows notifications** for new events, new codes, things ending soon, energy almost full and an evening dailies reminder. It lives in the tray (near the clock) and can start with Windows.
+- **Your energy & dailies**: connect HoYoLAB in **Settings** to see live Resin / Trailblaze Power / Battery, dailies and check-in status. The login is encrypted on that PC only (key in Windows Credential Manager).
+
+**Get it:** run `app\build.bat`. It creates `dist\Gacha Tracker.exe`, a single file you can copy to any Windows 10/11 PC.
+
+- The first time it runs, Windows SmartScreen may say *"Windows protected your PC"*, because the app isn't signed by a company. Click **More info → Run anyway**.
+- Closing the window keeps it running in the tray. To fully close it, right-click the ✦ tray icon → **Quit**.
+- Its settings and log live in `%APPDATA%\GachaTracker`.

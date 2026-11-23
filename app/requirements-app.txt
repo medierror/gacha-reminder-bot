@@ -1,0 +1,10 @@
+# Desktop app (Windows). Shares sources.py / accounts.py with the bot.
+pywebview>=5
+pystray>=0.19
+pillow>=10
+pyinstaller>=6
+aiohttp>=3.9
+genshin>=1.7
+cryptography>=42
+keyring>=25
+tzdata

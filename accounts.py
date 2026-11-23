@@ -49,13 +49,13 @@ def _key_from_file() -> str:
     return KEY_FILE.read_text().strip()
 
 
-def _fernet() -> Fernet:
+def _fernet(service: str = KEYRING_SERVICE) -> Fernet:
     if os.name != "nt":
         return Fernet(_key_from_file().encode())
-    key = keyring.get_password(KEYRING_SERVICE, KEYRING_USER)
+    key = keyring.get_password(service, KEYRING_USER)
     if not key:
         key = Fernet.generate_key().decode()
-        keyring.set_password(KEYRING_SERVICE, KEYRING_USER, key)
+        keyring.set_password(service, KEYRING_USER, key)
     return Fernet(key.encode())
 
 
@@ -63,19 +63,20 @@ class AccountStore:
     """{discord_user_id: {"cookies": {...}, "games": {game: {"uid", "nickname", "level", "server"}},
                           "linked_at": ts, "expired": bool}}"""
 
-    def __init__(self):
+    def __init__(self, data_file: Path = DATA_FILE, service: str = KEYRING_SERVICE):
+        self.file, self.service = Path(data_file), service
         self.data: dict = {}
-        if DATA_FILE.exists():
+        if self.file.exists():
             try:
-                self.data = json.loads(_fernet().decrypt(DATA_FILE.read_bytes()))
+                self.data = json.loads(_fernet(self.service).decrypt(self.file.read_bytes()))
             except (InvalidToken, ValueError):
-                log.error("Could not decrypt linked accounts (encryption key missing?). Please /link again.")
+                log.error("Could not decrypt linked accounts (encryption key missing?). Please link again.")
 
     def save(self):
-        DATA_FILE.parent.mkdir(exist_ok=True)
-        tmp = DATA_FILE.with_suffix(".tmp")
-        tmp.write_bytes(_fernet().encrypt(json.dumps(self.data).encode()))
-        tmp.replace(DATA_FILE)
+        self.file.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self.file.with_suffix(".tmp")
+        tmp.write_bytes(_fernet(self.service).encrypt(json.dumps(self.data).encode()))
+        tmp.replace(self.file)
 
     def get(self, user_id) -> dict | None:
         return self.data.get(str(user_id))
@@ -141,6 +142,15 @@ async def check_in(cookies: dict, game: str):
     except genshin.GenshinException as e:
         log.warning("Check-in failed (%s): %s", game, e.retcode)
         return "error", None
+
+
+async def checked_in_today(cookies: dict, game: str):
+    """True / False, or None if it couldn't be checked."""
+    try:
+        info = await _client(cookies).get_reward_info(game=CHECKIN_GAME[game])
+        return bool(info.signed_in)
+    except genshin.GenshinException:
+        return None
 
 
 async def get_notes(cookies: dict, game: str, uid: int) -> dict:
