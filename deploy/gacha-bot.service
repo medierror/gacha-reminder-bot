@@ -1,0 +1,38 @@
+[Unit]
+Description=Gacha Reminder Discord bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=gachabot
+Group=gachabot
+WorkingDirectory=/home/gachabot/gacha-reminder-bot
+ExecStart=/home/gachabot/gacha-reminder-bot/.venv/bin/python bot.py
+Restart=always
+RestartSec=15
+Environment=PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+
+# Sandbox: the bot can only write to its own data folder and key folder
+ProtectSystem=strict
+ReadWritePaths=/home/gachabot/gacha-reminder-bot/data /home/gachabot/.config/gacha-reminder-bot
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+RestrictSUIDSGID=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+UMask=0077
+MemoryMax=500M
+
+[Install]
+WantedBy=multi-user.target

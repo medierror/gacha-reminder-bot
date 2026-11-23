@@ -3,12 +3,14 @@
 Security:
 - Only HoYoLAB *ltoken* cookies are used. They can read game info and claim check-in rewards, but cannot
   change the password/email, log into the game or spend anything. No passwords are ever asked for.
-- Cookies are encrypted (Fernet / AES) in data/accounts.enc. The encryption key lives in Windows Credential
-  Manager, not next to the file, so copying the bot folder doesn't leak the accounts.
+- Cookies are encrypted (Fernet / AES) in data/accounts.enc. The encryption key is kept apart from that file:
+  in Windows Credential Manager on Windows, or on a Linux server in ~/.config/gacha-reminder-bot/accounts.key
+  (readable only by the bot's own user). Copying the bot folder alone doesn't leak the accounts.
 - Cookies are never printed to the console or posted in Discord. /unlink deletes them immediately.
 """
 import json
 import logging
+import os
 import time
 from pathlib import Path
 
@@ -33,7 +35,23 @@ SERVER_HINTS = {"europe": ("euro", "eur", "_eu"), "america": ("usa", "_us", "ame
 COOKIE_NAMES = ("ltuid_v2", "ltoken_v2", "ltmid_v2")
 
 
+KEY_FILE = Path.home() / ".config" / "gacha-reminder-bot" / "accounts.key"
+
+
+def _key_from_file() -> str:
+    """Linux servers have no Credential Manager: keep the key in a file only this user can read."""
+    if not KEY_FILE.exists():
+        KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        os.chmod(KEY_FILE.parent, 0o700)
+        fd = os.open(KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(Fernet.generate_key().decode())
+    return KEY_FILE.read_text().strip()
+
+
 def _fernet() -> Fernet:
+    if os.name != "nt":
+        return Fernet(_key_from_file().encode())
     key = keyring.get_password(KEYRING_SERVICE, KEYRING_USER)
     if not key:
         key = Fernet.generate_key().decode()

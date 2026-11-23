@@ -130,3 +130,21 @@ For 24/7 uptime you can run it on a small always-on machine (a Raspberry Pi, an 
 - Honkai 3rd has no public event calendar, so add its events with `/event` and `/recurring`.
 
 These are free community services. If one goes down, the bot keeps running and catches up when it comes back.
+
+---
+
+## ☁️ Running 24/7 on a server
+
+The `deploy/` folder runs the bot on a small Linux server (Ubuntu 24.04), so your PC can be off.
+
+- **`server-setup.sh`** (once, as root): installs updates and turns on automatic security updates. It sets a firewall that blocks all incoming connections except SSH, allows SSH login with a key only (no passwords), and adds fail2ban against password guessing. It also creates a `gachabot` user with no login and no admin rights, and a **read-only** GitHub deploy key.
+- **`install.sh`** (as root, any time): downloads or updates the bot from GitHub, installs the libraries and restarts it. This is also how you **update** the bot.
+- **`gacha-bot.service`**: runs the bot in the background and restarts it if it crashes or the server reboots. It's sandboxed, so the bot can only write to its own `data/` folder.
+
+Useful commands on the server:
+```
+sudo systemctl status gacha-bot        # is it running?
+sudo journalctl -u gacha-bot -f        # live log
+sudo bash /home/gachabot/gacha-reminder-bot/deploy/install.sh   # update to the latest version
+```
+⚠️ Run the bot in **one place only**. If it runs on the PC and the server at the same time, every message gets posted twice.
